@@ -28,6 +28,7 @@
   let activeIndicatorName = "经营";
   let toastTimer;
   let searchTimer;
+  let routeWarmupStarted = false;
 
   const escapeHtml = value => String(value ?? "").replace(/[&<>\"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[character]));
 
@@ -40,6 +41,7 @@
       frame.dataset.pendingRoute = "false";
       activateFrame(route);
     }
+    if (route === "overview") warmRoutesInBackground();
   }
 
   initialFrame.addEventListener("load", () => markFrameReady(initialFrame, "overview"));
@@ -59,11 +61,35 @@
     frame.className = "route-frame";
     frame.dataset.routeFrame = route;
     frame.title = `企业经营管理驾驶舱${route.startsWith("ranking") ? "排行" : route === "supervision" ? "督办" : "总览"}`;
-    frame.src = `./${files[route]}`;
     frame.addEventListener("load", () => markFrameReady(frame, route));
     stack.appendChild(frame);
     frames.set(route, frame);
+    frame.src = `./${files[route]}`;
     return frame;
+  }
+
+  function warmRoutesInBackground() {
+    if (routeWarmupStarted) return;
+    routeWarmupStarted = true;
+    const routes = Object.keys(files).filter(route => route !== "overview");
+    let index = 0;
+    const schedule = callback => {
+      if ("requestIdleCallback" in window) window.requestIdleCallback(callback, { timeout: 1200 });
+      else window.setTimeout(callback, 160);
+    };
+    const warmNext = () => {
+      const route = routes[index++];
+      if (!route) return;
+      const frame = ensureFrame(route);
+      const continueWarmup = () => schedule(warmNext);
+      if (frame.dataset.loaded === "true") {
+        continueWarmup();
+        return;
+      }
+      frame.addEventListener("load", continueWarmup, { once: true });
+      frame.addEventListener("error", continueWarmup, { once: true });
+    };
+    schedule(warmNext);
   }
 
   function applyScope(frame) {
