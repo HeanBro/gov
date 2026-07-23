@@ -159,7 +159,6 @@
       if (deadlineSpan) deadlineSpan.textContent = completed ? "已完成" : deadlineSpan.dataset.originalText;
     });
     if (scrollRegion) scrollRegion.scrollTop = 0;
-    send({ action: "show-toast", text: `已切换至${label}` });
   }
 
   document.addEventListener("click", event => {
