@@ -25,6 +25,7 @@
   let currentRoute = "overview";
   let requestedRoute = "overview";
   let selectedScope = "大湾区区域公司";
+  let activeIndicatorName = "经营";
   let toastTimer;
   let searchTimer;
 
@@ -99,38 +100,42 @@
   function openIndicator(name) {
     const data = window.PROTOTYPE_DATA?.indicators?.[name] || window.PROTOTYPE_DATA?.indicators?.经营;
     if (!data) return;
-    modalTitle.textContent = `${name}板块指标明细`;
+    activeIndicatorName = name;
+    modalTitle.textContent = "指标健康情况";
+    const healthy = data.metrics.filter(metric => metric.value >= 90).length;
+    const segmentCount = 12;
+    const activeSegments = Math.round(healthy / data.metrics.length * segmentCount);
     modalContent.innerHTML = `
-      <div class="data-note">指标定义、评分标准和数据来源来自《六大领域指标说明》正式表；当前分数为本原型的仿真展示值，用于演示穿透与联动。</div>
-      ${data.weightTotal !== 100 ? `<div class="data-note data-warning">原表${name}板块权重合计为 ${data.weightTotal}%，此处保留原始权重，综合分按权重总和归一化演示。</div>` : ""}
       <div class="indicator-summary">
-        <div class="summary-line"><span>当前综合分 · ${escapeHtml(selectedScope)}</span><strong class="summary-score">${data.score}<small> 分</small></strong></div>
-        <div class="summary-track"><i style="width:${data.score}%"></i></div>
-        <div class="metric-foot"><span>正式指标 ${data.metrics.length} 项 · 权重合计 ${data.weightTotal}%</span><span>${data.score >= 95 ? "健康" : "需关注"}</span></div>
+        <div class="summary-line"><span>当前综合分</span><strong class="summary-score">${data.score}</strong></div>
+        <div class="summary-track">${Array.from({ length: segmentCount }, (_, index) => `<i class="${index < activeSegments ? "is-filled" : ""}"></i>`).join("")}</div>
+        <div class="summary-meta">年度指标 ${data.metrics.length} 项 / 已达标 ${healthy} 项</div>
       </div>
-      <div class="scope-field"><label>当前穿透范围</label><div><span>${escapeHtml(selectedScope)}</span><span>⌄</span></div></div>
+      <div class="scope-field"><label>按公司分类</label><button type="button" data-modal-scope><span class="scope-dot"></span><span>${escapeHtml(selectedScope)}</span><span class="scope-chevron">⌄</span></button></div>
       <div class="metric-list">${data.metrics.map(metric => `
         <details class="metric-item">
           <summary>
             <div class="metric-head"><span class="metric-name">${escapeHtml(metric.name)}</span><span class="metric-weight">权重 ${metric.weight}%</span><strong class="metric-value">${metric.value}<small>%</small></strong></div>
-            <p class="metric-copy">${escapeHtml(metric.definition)}</p>
+            <p class="metric-copy">指标权重 ${metric.weight}% · 数据来源：${escapeHtml(metric.source)}</p>
             <div class="metric-track"><i style="width:${metric.value}%"></i></div>
-            <div class="metric-foot"><span>${escapeHtml(metric.source)}</span><span>${metric.value >= 90 ? "达标" : "持续推进"}</span></div>
+            <div class="metric-foot"><span>口径：${escapeHtml(metric.calculation)}</span><span>${metric.value >= 90 ? "达标" : "持续推进"}</span></div>
           </summary>
           <div class="metric-detail-grid">
+            <div class="metric-detail-row"><b>指标定义</b><span>${escapeHtml(metric.definition)}</span></div>
             <div class="metric-detail-row"><b>计算口径</b><span>${escapeHtml(metric.calculation)}</span></div>
             <div class="metric-detail-row"><b>评分标准</b><span>${escapeHtml(metric.standard)}</span></div>
             <div class="metric-detail-row"><b>红线规则</b><span>${escapeHtml(metric.redline)}</span></div>
             <div class="metric-detail-row"><b>项目层穿透</b><span>${escapeHtml(metric.project)}</span></div>
             <div class="metric-detail-row"><b>区域层穿透</b><span>${escapeHtml(metric.region)}</span></div>
             <div class="metric-detail-row"><b>本部层穿透</b><span>${escapeHtml(metric.hq)}</span></div>
+            <div class="metric-detail-row"><b>数据说明</b><span>指标定义来自正式说明表；当前分值为交互原型仿真值。${data.weightTotal !== 100 ? `${name}板块原表权重合计 ${data.weightTotal}%，已保留原始权重。` : ""}</span></div>
           </div>
         </details>`).join("")}</div>`;
     modal.hidden = false;
   }
 
   function closeModal() { modal.hidden = true; }
-  function closeSheet() { sheet.hidden = true; sheetContent.innerHTML = ""; }
+  function closeSheet() { sheet.hidden = true; sheetContent.innerHTML = ""; sheet.dataset.returnIndicator = ""; }
 
   function openSheet(type, payload = {}) {
     closeModal();
@@ -195,15 +200,22 @@
   }
 
   document.addEventListener("click", event => {
-    const target = event.target.closest("[data-close-modal], [data-close-sheet], [data-scope-option], [data-menu-action], [data-search-result], [data-open-indicator]");
+    const target = event.target.closest("[data-close-modal], [data-close-sheet], [data-scope-option], [data-menu-action], [data-search-result], [data-open-indicator], [data-modal-scope]");
     if (!target) return;
     if (target.dataset.closeModal !== undefined) closeModal();
     if (target.dataset.closeSheet !== undefined) closeSheet();
+    if (target.dataset.modalScope !== undefined) {
+      const returnIndicator = activeIndicatorName;
+      openSheet("scope");
+      sheet.dataset.returnIndicator = returnIndicator;
+    }
     if (target.dataset.scopeOption) {
+      const returnIndicator = sheet.dataset.returnIndicator;
       selectedScope = target.dataset.scopeOption;
       frames.forEach(frame => applyScope(frame));
       showToast(`已切换至${selectedScope}`);
       closeSheet();
+      if (returnIndicator) openIndicator(returnIndicator);
     }
     if (target.dataset.menuAction) { showToast({ profile: "个人信息已打开", notice: "通知设置已打开", refresh: "数据刷新任务已提交", about: "当前为企业经营管理驾驶舱交互原型" }[target.dataset.menuAction]); }
     if (target.dataset.searchResult) { showToast(`已定位：${target.dataset.searchResult}`); closeSheet(); }

@@ -66,7 +66,7 @@
     // The workbook defines the number of metrics per domain; the score values
     // remain demo values because the workbook does not contain live measures.
     const metricCounts = { "经营板块": 9, "运营板块": 3, "内控板块": 3, "舆情板块": 4, "创新板块": 3, "安全板块": 5 };
-    const metricScores = { "经营板块": 92, "运营板块": 95, "内控板块": 97, "舆情板块": 95, "创新板块": 87, "安全板块": 99 };
+    const metricScores = { "经营板块": 98, "运营板块": 97, "内控板块": 99, "舆情板块": 96, "创新板块": 88, "安全板块": 99 };
     const metricHighlights = {
       "经营板块": "收入/利润/现金流",
       "运营板块": "满意度/投诉闭环",

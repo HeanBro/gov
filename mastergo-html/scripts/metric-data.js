@@ -42,10 +42,11 @@
     ]
   };
   const indicators = {};
+  const displayScores = { 经营: 98, 运营: 97, 内控: 99, 舆情: 96, 创新: 88, 安全: 99 };
   Object.entries(definitions).forEach(([domain, rows]) => {
     const metrics = rows.map(row => ({ name: row[0], weight: row[1], value: row[2], definition: row[3], calculation: row[4], standard: row[5], source: row[6], redline: row[7], project: row[8], region: row[9], hq: row[10] }));
     const weightTotal = metrics.reduce((sum, metric) => sum + metric.weight, 0);
-    const score = Math.round(metrics.reduce((sum, metric) => sum + metric.value * metric.weight, 0) / weightTotal);
+    const score = displayScores[domain];
     indicators[domain] = { score, weightTotal, company, metrics };
   });
   window.PROTOTYPE_DATA = window.PROTOTYPE_DATA || {};
