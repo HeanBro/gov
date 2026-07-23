@@ -103,8 +103,8 @@
     activeIndicatorName = name;
     modalTitle.textContent = "指标健康情况";
     const healthy = data.metrics.filter(metric => metric.value >= 90).length;
-    const segmentCount = 12;
-    const activeSegments = Math.round(healthy / data.metrics.length * segmentCount);
+    const segmentCount = data.metrics.length;
+    const activeSegments = healthy;
     modalContent.innerHTML = `
       <div class="indicator-summary">
         <div class="summary-line"><span>当前综合分</span><strong class="summary-score">${data.score}</strong></div>

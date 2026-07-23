@@ -66,6 +66,7 @@
     // The workbook defines the number of metrics per domain; the score values
     // remain demo values because the workbook does not contain live measures.
     const metricCounts = { "经营板块": 9, "运营板块": 3, "内控板块": 3, "舆情板块": 4, "创新板块": 3, "安全板块": 5 };
+    const metricHealthy = { "经营板块": 6, "运营板块": 3, "内控板块": 3, "舆情板块": 4, "创新板块": 1, "安全板块": 5 };
     const metricScores = { "经营板块": 98, "运营板块": 97, "内控板块": 99, "舆情板块": 96, "创新板块": 88, "安全板块": 99 };
     const metricHighlights = {
       "经营板块": "收入/利润/现金流",
@@ -88,6 +89,16 @@
         span.style.whiteSpace = "nowrap";
         span.style.fontSize = "8px";
       });
+      const segmentTrack = [...card.querySelectorAll('[data-name="Paragraph:margin"] > [data-name="Container"]')]
+        .find(node => node.children.length >= 3);
+      if (segmentTrack) {
+        segmentTrack.dataset.h5MetricSegments = "true";
+        segmentTrack.replaceChildren(...Array.from({ length: metricCounts[domain] }, (_, index) => {
+          const segment = document.createElement("i");
+          segment.className = index < metricHealthy[domain] ? "is-achieved" : "";
+          return segment;
+        }));
+      }
     });
     [...root.querySelectorAll('[data-name="Button"], [data-name="容器 14291"], [data-name="容器 14297"]')].forEach(node => {
       node.style.cursor = "pointer";
@@ -257,6 +268,23 @@
           transform-origin: left center;
         }
         [data-h5-amount] { white-space: nowrap !important; }
+        [data-h5-metric-segments] {
+          height: 4px !important;
+          display: flex !important;
+          align-items: stretch !important;
+          gap: 2px !important;
+          padding: 0 !important;
+          overflow: hidden !important;
+        }
+        [data-h5-metric-segments] > i {
+          min-width: 0 !important;
+          height: 4px !important;
+          display: block !important;
+          flex: 1 !important;
+          border-radius: 8px !important;
+          background: #D8DDE5 !important;
+        }
+        [data-h5-metric-segments] > i.is-achieved { background: #22C55E !important; }
         [data-h5-chart-card] {
           height: auto !important;
           overflow: visible !important;
