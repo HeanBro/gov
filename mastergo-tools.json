@@ -1,0 +1,921 @@
+﻿{
+  "tools": [
+    {
+      "name": "get_guidelines",
+      "description": "规则加载工具：用于按 scope 获取 MasterGo / MasterGo 规则。页面生成优先调用 design_page；不要为了页面生成先单独调用本工具。scope 默认 [\"page-generate\"]；可选 page-generate / charts-import / component-import / component-generate / variable-import / variable-generate。charts-import 仅在页面需要图表时追加。component-generate 仅用于 agent_create_component 创建主组件/组件集；除非用户明确要求创建主组件、组件集、变体、可复用组件或抽成组件，否则不要加载 component-generate。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "page-generate",
+                "charts-import",
+                "component-import",
+                "component-generate",
+                "variable-import",
+                "variable-generate"
+              ]
+            }
+          }
+        },
+        "additionalProperties": false,
+        "description": "可选参数：scope，字符串数组，元素取值 page-generate / charts-import / component-import / component-generate / variable-import / variable-generate。不传默认 [\"page-generate\"]。多个 scope 同传会附加 Final Hard Gate。",
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "design_page",
+      "description": "【页面生成第一工具】用户要求设计、创建、生成页面或界面时，必须立即调用本工具；禁止模型先自行询问设计来源后调用组件工具。每次页面流程都必须先让用户二选一 designSource：自由绘制或使用组件库生成。选择 component-library 后列出当前文件本地组件库与已订阅远端团队库并动态多选，可单独或混合使用；确认后按顺序传 teamLibraries，未选中库严格隔离。design_page 只检查精确落盘快照，不执行远端拉取；快照缺失或用户选择刷新时，它会返回精确 get_component_info 参数。落盘完成后保持原参数并传 componentSnapshotsPrepared: true 回到 design_page，禁止重新选库。最终调用 submit_page_to_canvas。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "requirement": {
+            "type": "string",
+            "description": "界面需求描述，例如：\"登录页面\"、\"后台仪表盘\"等。"
+          },
+          "projectDir": {
+            "type": "string",
+            "description": "【选填】用户当前工作区的根目录绝对路径。变量场景与组件库场景下用于读取/写入 .mastergo 落盘数据。"
+          },
+          "designSource": {
+            "type": "string",
+            "enum": [
+              "free-draw",
+              "component-library"
+            ],
+            "description": "【必填（流程）】设计来源二选一：free-draw（自由绘制）/ component-library（使用组件库生成）。每次调用 design_page 都应先让用户明确选择。"
+          },
+          "userConfirmedDesignSource": {
+            "type": "boolean",
+            "default": false,
+            "description": "【必填（流程）】是否已完成本次「设计来源二选一」的用户确认。每次新页面流程都应传 true 才可继续。"
+          },
+          "userConfirmedTeamLibrary": {
+            "type": "boolean",
+            "default": false,
+            "description": "【组件库模式必填】只有 design_page 已列出本轮本地+远端候选，且用户随后通过动态多选明确选择一个或多个组件库时才能传 true；宿主不支持多选时才接受用户一次输入一个或多个完整具体选项名称。"
+          },
+          "userTeamLibraryConfirmationText": {
+            "type": "string",
+            "description": "【组件库选择确认】推荐传宿主多选返回的用户确认原文；必须包含所有选中 option 的完整 label。也可由 teamLibraries[].userConfirmationText 分项携带。"
+          },
+          "needsCharts": {
+            "type": "boolean",
+            "default": false,
+            "description": "【选填】页面是否需要图表能力。仅在构思阶段判断需要数据图表、能力雷达、趋势可视化等内容时传 true；无图表需求不要传 true。"
+          },
+          "teamLibraryName": {
+            "type": "string",
+            "description": "【旧版单库兼容】单选 option 绑定的完整组件库名称；多库页面优先使用 teamLibraries。"
+          },
+          "teamLibraryId": {
+            "type": "string",
+            "description": "【旧版单库兼容】单选 option 绑定的精确组件库 ID；本地为 local-{documentId}，远端为订阅团队库 ID。多库页面优先使用 teamLibraries。"
+          },
+          "teamLibraries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "teamLibraryId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "teamLibraryName": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "userConfirmationText": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "teamLibraryId",
+                "teamLibraryName"
+              ],
+              "additionalProperties": false
+            },
+            "description": "【组件库模式推荐】用户确认的有序组件库数组，可混合当前文件本地组件与远端订阅库。每项必须包含同一 option 绑定的精确 teamLibraryId、teamLibraryName，可选携带用户实际选择的完整 label 作为 userConfirmationText；也可统一传 userTeamLibraryConfirmationText。数组顺序就是同名资源优先顺序。"
+          },
+          "teamLibrarySnapshotMode": {
+            "type": "string",
+            "enum": [
+              "use-local",
+              "refresh"
+            ],
+            "description": "【任一已选库存在本地完整快照时使用】use-local 表示使用已有快照、缺失库交给 get_component_info 拉取；refresh 表示把全部已选库交给 get_component_info 重新拉取并覆盖。design_page 自身不执行远端拉取。"
+          },
+          "componentSnapshotsPrepared": {
+            "type": "boolean",
+            "default": false,
+            "description": "【仅由 get_component_info 页面生成落盘完成后传 true】保持原 design_page 的需求、来源、团队库顺序和用户确认不变，用于从快照准备阶段继续生成。工具会复核精确落盘快照，禁止模型自行伪造。"
+          },
+          "documentId": {
+            "type": "string",
+            "description": "【纯选填，禁止补问】目标 MasterGo 文件 ID。仅当用户主动提供或明确要求指定文件时传；未提供时直接省略并使用当前已连接文件。当前仅支持已 MCP 服务已连接的所在文件；不匹配时明确报错。"
+          },
+          "documentPageId": {
+            "type": "string",
+            "description": "【纯选填，禁止补问】目标 MasterGo 页面 ID。仅当用户主动提供或明确要求指定页面时传；未提供时直接省略并使用调用 design_page 时的当前页面。指定后，占位层与最终页面都固定生成在该页面。"
+          }
+        },
+        "required": [
+          "requirement"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_version",
+      "description": "版本信息：当用户询问 MasterGo MCP / 当前 MCP / MasterGo MCP 的版本号时，调用本工具获取准确版本。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false,
+        "description": "无需参数获取版本信息",
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_library_list",
+      "description": "【团队库/组件库统一列表入口，不是页面生成入口】用户使用“团队库”“组件库”“订阅库”或“当前文件组件”等措辞查询可用来源时，都调用本工具。每次都分组返回当前连接文件唯一的本地组件身份（精确 local-{documentId}）和当前文件已订阅的远端团队库，禁止只返回其中一组。用户只问有哪些库时返回列表后结束且不询问；泛指获取当前页面团队库/组件库、未指定唯一完整来源或名称模糊时，必须按工具返回的 question JSON 弹出包含本地与远端来源的单选框（multiple: false），禁止用普通编号列表代替。用户已明确当前文件组件或唯一完整远端库名时，直接复用精确 ID/name。禁止扫描落盘 local-* 目录、自动选择库或自动调用 catalog/details。页面生成由 design_page 独立编排，并使用包含当前文件本地组件与远端订阅库的动态多选。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectDir": {
+            "type": "string",
+            "description": "【建议传入】用户当前工作区根目录绝对路径，用于隔离不同项目的选库确认。"
+          }
+        },
+        "additionalProperties": false,
+        "description": "可选 projectDir，用于把本轮候选确认绑定到当前工作区。",
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_component_info",
+      "description": "【组件库快照准备工具】页面生成中只有 design_page 明确返回快照准备参数后才调用；其有序 teamLibraries 可同时包含当前文件 local-{documentId} 与远端订阅库。本工具按精确 ID 分别准备本地/远端快照，禁止扫描其它落盘库。公开调用仍先通过 get_library_list 选择单一来源。纯获取流程成功后立即结束，页面生成落盘完成后回到原 design_page。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectDir": {
+            "type": "string",
+            "description": "【必填】用户当前工作区的根目录绝对路径（用于落盘）"
+          },
+          "teamLibraryId": {
+            "type": "string",
+            "description": "【远端库必填】必须是 get_library_list 候选中经用户明确选择，或 design_page 页面流程已授权的精确远端团队库 ID；远端落盘目录名和 meta.teamLibrary.id 必须与它逐字一致。本地库可传 local-{documentId}，或仅在 catalog 精确存在对应本地项时传纯 documentId。"
+          },
+          "teamLibraryName": {
+            "type": "string",
+            "description": "【选填】团队库完整名称。名称不能用于自动匹配 ID；远端同时传入时必须与该 ID 在当前订阅列表中的名称逐字一致。本地当前文件可传“当前文件”。"
+          },
+          "userTeamLibraryConfirmationText": {
+            "type": "string",
+            "description": "【组件库选择确认原文】页面生成使用宿主多选返回的原文，必须包含所有选中 option 的完整 label 且不能是疑问句；每项也可通过 teamLibraries[].userConfirmationText 单独携带。页面生成必须逐字使用 design_page 返回的确认参数。"
+          },
+          "teamLibraries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "teamLibraryId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "teamLibraryName": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "userConfirmationText": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "teamLibraryId",
+                "teamLibraryName"
+              ],
+              "additionalProperties": false
+            },
+            "description": "【页面组件库有序白名单】按用户选择顺序传入，可混合本地 local-{documentId} 与远端订阅库。每项包含 option 绑定的精确 teamLibraryId、teamLibraryName，可选完整 label 作为 userConfirmationText。一次调用按顺序准备全部快照。"
+          },
+          "teamLibrarySnapshotMode": {
+            "type": "string",
+            "enum": [
+              "use-local",
+              "refresh"
+            ],
+            "description": "【已有本地快照时必填】use-local 表示复用已有快照并只拉取缺失库；refresh 表示重新拉取并覆盖全部已选库。"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "library-persistence",
+              "page-generation"
+            ],
+            "default": "library-persistence",
+            "description": "【调用目的】library-persistence 用于独立获取/落盘，完成后结束；page-generation 只能使用 design_page 返回的精确参数，完成后必须回到原 design_page 且不得重新选库。"
+          },
+          "refresh": {
+            "type": "boolean",
+            "default": false,
+            "description": "【选填，默认 false】用户选择重新拉取时传 true；若同一 ID 已有完整快照，还必须同时传 overwriteExisting: true。"
+          },
+          "overwriteExisting": {
+            "type": "boolean",
+            "default": false,
+            "description": "【选填，默认 false】仅与 refresh: true 一起使用。只有用户已明确选择覆盖/重新拉取同一团队库时才传 true。"
+          },
+          "componentLimit": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "description": "每批拉取的组件数量；不传时服务端默认 200。"
+          }
+        },
+        "required": [
+          "projectDir"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_component_catalog",
+      "description": "【组件列表工具，不属于团队库落盘流程】读取已准备快照中的 index.md，不解析 components/*.json，也不发送 atlas 或组件截图。用户只要求获取/落盘团队库时禁止调用；只有用户明确查看组件列表，或 design_page 已确认使用组件生成页面时才调用。只查看列表时返回后结束，生成页面才按真实需求继续 get_component_details。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectDir": {
+            "type": "string",
+            "description": "【必填】用户当前工作区的根目录绝对路径。"
+          },
+          "teamLibraryId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "【必填】本轮锁定的精确团队库 ID：远端为落盘一级目录名本身，本地规范 ID 为 local-{documentId}（也接受 catalog 中可精确映射的纯 documentId）。每次读取都必须显式传入，禁止扫描或自动选择其它落盘团队库。"
+          },
+          "teamLibraryName": {
+            "type": "string",
+            "description": "【选填】团队库名称；若同时传入，必须与 teamLibraryId 指向同一个库。"
+          }
+        },
+        "required": [
+          "projectDir",
+          "teamLibraryId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_component_details",
+      "description": "【组件详情工具，不属于团队库落盘流程】读取 get_component_catalog 中按页面实际需求选中的全部组件 JSON，不设人为数量上限，只返回真实结构字段。只有用户明确查看组件详情，或 design_page 页面生成流程选定候选后才调用；纯获取/落盘团队库时禁止调用。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectDir": {
+            "type": "string",
+            "description": "【必填】用户当前工作区的根目录绝对路径。"
+          },
+          "teamLibraryId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "【必填】与 get_component_catalog 相同的、由用户确认的团队库 ID。禁止切换到其它落盘库。"
+          },
+          "teamLibraryName": {
+            "type": "string",
+            "description": "【选填】团队库名称；若同时传入，必须与 teamLibraryId 指向同一个库。"
+          },
+          "componentFiles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "description": "【必填】从 get_component_catalog 返回结果中选择页面实际需要的全部 .json 文件名，不设人为数量上限，例如 [\"001-button.json\", \"002-card.json\"]。"
+          }
+        },
+        "required": [
+          "projectDir",
+          "teamLibraryId",
+          "componentFiles"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_library_assets",
+      "description": "【页面组件生成资源工具，不属于团队库落盘流程】严格按 teamLibraryId 读取目标快照中的 icons.json 和 variable.json，并记录为本轮提交许可。纯获取/拉取/落盘团队库时禁止调用；页面生成时只允许读取 design_page 已选白名单中的库，禁止遍历 .mastergo/library/* 或读取兄弟目录。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectDir": {
+            "type": "string",
+            "description": "【必填】用户当前工作区的根目录绝对路径。"
+          },
+          "teamLibraryId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "【必填】与 get_component_catalog/get_component_details 完全相同的团队库 ID。"
+          },
+          "teamLibraryName": {
+            "type": "string",
+            "description": "【选填】团队库名称；若同时传入，必须与 teamLibraryId 指向同一个库。"
+          }
+        },
+        "required": [
+          "projectDir",
+          "teamLibraryId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_variables",
+      "description": "变量列表：获取当前 MasterGo 文件中的全部本地变量。只读取当前文件，不读取远程团队库。返回 documentName、documentId、variables（updateVariables 同款批量数组）；兼容接口仅返回数组时的形态。每次成功后将 variables 字段写入 .mastergo/library/local-{documentId}/variable.json。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectDir": {
+            "type": "string",
+            "minLength": 1,
+            "description": "【必填】用户当前工作区的根目录绝对路径；变量数组写入该目录下的 .mastergo/library/local-{documentId}/variable.json。"
+          }
+        },
+        "required": [
+          "projectDir"
+        ],
+        "additionalProperties": false,
+        "description": "必填：projectDir（工作区根目录绝对路径，用于落盘）。",
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_fonts",
+      "description": "字体列表：从 MasterGo 全部可用字体中过滤团队字体（team）和企业字体（org），以 { name, family, style } 数组写入 .mastergo/fonts/fonts.json。name 用于查找，font-family 必须使用 family；匹配或加载失败时由 C2D 回退为 Inter Regular。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectDir": {
+            "type": "string",
+            "minLength": 1,
+            "description": "【必填】用户当前工作区的根目录绝对路径；字体清单写入该目录下的 .mastergo/fonts/fonts.json。"
+          }
+        },
+        "required": [
+          "projectDir"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "agent_update_variables",
+      "description": "变量更新：创建、修改、排序当前 MasterGo 文件变量；删除变量必须使用 agent_remove_variable。固定流程：先调用 get_variables 落盘；创建一套变量时先提交基础变量，工具成功后会自动刷新并落盘最新 variable.json，再提交语义/引用变量；若自动刷新失败，再手动调用 get_variables。本工具首次调用会自动加载 variable-generate 规则。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectDir": {
+            "type": "string",
+            "minLength": 1,
+            "description": "【必填】用户当前工作区的根目录绝对路径。"
+          },
+          "filePath": {
+            "type": "string",
+            "description": "【选填】变量 JSON 文件绝对路径。通常是 get_variables 落盘后的 .mastergo/library/local-{documentId}/variable.json。"
+          },
+          "variables": {
+            "description": "【选填】变量数组，格式与 get_variables 落盘文件一致；也可传 { variables: [...] }。"
+          },
+          "operations": {
+            "description": "【选填】操作数组；用于 createVariable/updateVariable/moveVariable 等非完整快照式操作。删除请使用 agent_remove_variable。"
+          }
+        },
+        "required": [
+          "projectDir"
+        ],
+        "additionalProperties": false,
+        "description": "必填：projectDir。提交数据可从 filePath、variables、operations 中选择；均未提供时，读取最近一次 get_variables 落盘的 variable.json。",
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "update_variables",
+      "description": "兼容旧工具名。请改用 agent_update_variables。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectDir": {
+            "type": "string",
+            "minLength": 1,
+            "description": "【必填】用户当前工作区的根目录绝对路径。"
+          },
+          "filePath": {
+            "type": "string",
+            "description": "【选填】变量 JSON 文件绝对路径。通常是 get_variables 落盘后的 .mastergo/library/local-{documentId}/variable.json。"
+          },
+          "variables": {
+            "description": "【选填】变量数组，格式与 get_variables 落盘文件一致；也可传 { variables: [...] }。"
+          },
+          "operations": {
+            "description": "【选填】操作数组；用于 createVariable/updateVariable/moveVariable 等非完整快照式操作。删除请使用 agent_remove_variable。"
+          }
+        },
+        "required": [
+          "projectDir"
+        ],
+        "additionalProperties": false,
+        "description": "必填：projectDir。提交数据可从 filePath、variables、operations 中选择；均未提供时，读取最近一次 get_variables 落盘的 variable.json。",
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "submit_page_to_canvas",
+      "description": "页面提交工具：仅提交 design_page 已生成的完整 HTML。页面级生成必须先调用 design_page；不要把本工具作为首选入口。顶层 code / filePath 严格二选一：页面生成传 code；仅在用户明确要求把现成本地 HTML 导入为新页面时传 filePath。用户要求同步/覆盖/更新/推送本地文件到已有画布或设计稿时，必须使用 agent_sync_design。一次只提交一个页面，多页面由 design_page 逐页调用。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "description": "【页面生成必填，与 filePath 互斥】顶层非空完整页面 HTML。页面设计交付必须使用此参数。"
+          },
+          "filePath": {
+            "type": "string",
+            "minLength": 1,
+            "description": "【仅导入新页面时使用，与 code 互斥】现成本地 HTML 文件的绝对路径。同步/覆盖/更新/推送已有画布必须改用 agent_sync_design。"
+          },
+          "projectDir": {
+            "type": "string",
+            "description": "【选填】用户当前工作区的根目录绝对路径。遗漏时依次复用当前 design_page 页面生成会话、同一工具链最近使用的工作区；均不可用时回退到 MCP 进程工作目录。"
+          },
+          "saveCodeToLocal": {
+            "type": "boolean",
+            "default": false,
+            "description": "是否将 MasterGo 返回的渲染结果保存到本地 .mastergo 目录（落盘机制）"
+          },
+          "documentId": {
+            "type": "string",
+            "description": "【纯选填，禁止补问】沿用 design_page 的目标文件；若页面流程未指定目标文件则省略并使用当前已连接文件。不要向用户索要此参数。"
+          },
+          "documentPageId": {
+            "type": "string",
+            "description": "【纯选填，禁止补问】沿用 design_page 的目标页面；若页面流程未指定目标页面则省略并使用 design_page 启动时的当前页面。不要向用户索要此参数。"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "agent_create_component",
+      "description": "主组件创建工具：仅当用户明确要求创建主组件、母版组件、组件集、变体、可复用组件或抽成组件时使用。调用前加载 component-generate + page-generate。团队库页面生成不要使用本工具，也不要加载 component-generate。本工具会拒绝未声明 data-type=\"component\" 或 data-type=\"component-set\" 的普通 HTML。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "组件的纯 HTML 字符串。根节点必须包含 data-type=\"component\" 或 \"component-set\"；若为 component-set，变体节点必须是其直接子节点，并使用 data-variant-* 扁平声明变体属性。"
+          },
+          "projectDir": {
+            "type": "string",
+            "description": "【选填】用户当前工作区的根目录绝对路径。若传入，工具会探测 .mastergo/library/local-{documentId}/ 是否已落盘当前文件变量；存在则自动追加 variable-import 规则，让母版组件优先 var(...) 引用变量，保持设计系统的视觉语言一致。"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_selection_node",
+      "description": "设计节点快照工具：读取当前选中图层或指定图层的节点 HTML/图层数据，并同步到本地 .mastergo 基准文件。用于获取画布上下文和后续画布修改；不是前端代码导出工具。用户明确要求导出前端代码或可运行 HTML 时才用 get_frontend_code。没有具体修改诉求时，不要在读取后自动调用更新、替换或同步工具。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectDir": {
+            "type": "string",
+            "description": "【必填】用户当前工作区的根目录绝对路径"
+          },
+          "targetNodeId": {
+            "type": "string",
+            "description": "【选填】纯图层 ID、MasterGo goto 链接，或包含一个/多个此类链接的用户原文。工具会解析 layer_id；解析出多个 ID 时自动批量拉取。不传时读取当前选中图层。"
+          },
+          "targetNodeIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "【选填】批量目标列表；每项可为纯图层 ID 或 MasterGo goto 链接，按出现顺序解析、去重并拉取节点快照。不要混传不同 file 的链接。"
+          },
+          "syncToBase": {
+            "type": "boolean",
+            "default": true,
+            "description": "【选填】是否将获取到的子图层代码同步回本地 .mastergo 目录下的基准 HTML 文件（合并更新）。默认为 true。"
+          }
+        },
+        "required": [
+          "projectDir"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_frontend_code",
+      "description": "前端代码导出工具：仅当用户要求获取/导出前端代码、工程代码、生成可运行 HTML 或保存到前端项目时调用。只读取画布上下文或准备修改设计时，用 get_selection_node。调用前必须确认 frontendFramework；若用户未指定格式，先询问用户在 html / vue / react / wxml / angular / android / json 中 N 选 1，不要默认 html。frontendFramework=html 落盘后会返回截图路径、frontend-code-review 和 frontendReviewSession；必须基于这些材料修复落盘 HTML。后续还原度反馈按 frontendReviewSession 增量修改已有文件，禁止再次调用本工具覆盖。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectDir": {
+            "type": "string",
+            "description": "【必填】用户当前工作区的根目录绝对路径。outDir 必须解析在该目录内。"
+          },
+          "targetNodeId": {
+            "type": "string",
+            "description": "【选填】纯图层 ID、MasterGo goto 链接，或包含一个/多个此类链接的用户原文。工具会解析 layer_id；解析出多个 ID 时自动批量拉取。不传时读取当前选中图层。"
+          },
+          "targetNodeIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "【选填】批量目标列表；每项可为纯图层 ID 或 MasterGo goto 链接，按出现顺序解析、去重并拉取前端代码。不要混传不同 file 的链接。"
+          },
+          "frontendFramework": {
+            "type": "string",
+            "enum": [
+              "html",
+              "vue",
+              "react",
+              "wxml",
+              "angular",
+              "android",
+              "json"
+            ],
+            "description": "【必选意图】前端代码格式。可选 html / vue / react / wxml / angular / android / json。用户未指定时必须先询问用户 N 选 1；工具不再默认 html。"
+          },
+          "outDir": {
+            "type": "string",
+            "description": "【选填】用户明确指定的保存目录。相对路径按 projectDir 解析；前端代码默认保存到 projectDir 根目录"
+          },
+          "fileName": {
+            "type": "string",
+            "description": "【选填】保存的文件名，例如 index.html、index.vue、index.jsx 或 node.json。不传时根据节点名称生成。"
+          },
+          "writeToFile": {
+            "type": "boolean",
+            "description": "【选填】是否写入本地文件。前端代码默认写入 projectDir 根目录；显式传 false 表示只返回代码不落盘。"
+          }
+        },
+        "required": [
+          "projectDir"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_screenshot",
+      "description": "截图落盘工具：仅当用户明确要求保存/导出截图，或主动要求读取现有设计视觉参考时，导出当前选中图层或指定图层的 PNG，保存到 projectDir/.mastergo/design/{documentId}/{rootId}/screenshot，并返回本地图片路径。组件页面提交后的确认式 QA 必须使用 review_generated_page 临时返回图片，不得调用本工具落盘代替。日常读取上下文或小修改用 get_selection_node。本工具不返回 base64。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectDir": {
+            "type": "string",
+            "description": "【必填】用户当前工作区的根目录绝对路径；截图会写入该目录下的 .mastergo/design/{documentId}/{rootId}/screenshot。"
+          },
+          "targetNodeId": {
+            "type": "string",
+            "description": "【选填】纯图层 ID、MasterGo goto 链接，或包含一个/多个此类链接的用户原文。工具会解析 layer_id；解析出多个 ID 时自动批量截图。不传时导出当前选中图层。"
+          },
+          "targetNodeIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "【选填】批量目标列表；每项可为纯图层 ID 或 MasterGo goto 链接，按出现顺序解析、去重并逐个导出预览图。不要混传不同 file 的链接。"
+          }
+        },
+        "required": [
+          "projectDir"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "review_generated_page",
+      "description": "组件页面生成后的用户确认式 QA 工具。submit_page_to_canvas 返回 qaReviewId 并要求询问用户后，只有用户本轮明确选择“是/检查”或“否/跳过”时才调用。decision=yes 会获取目标页面截图并作为临时图片内容返回给模型，不写入项目目录；只允许检查和报告，不得自动修复。decision=no 会清理 QA 状态并结束任务。自由绘制模式不得调用。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectDir": {
+            "type": "string",
+            "description": "【必填】与刚完成组件页面生成完全相同的工作区绝对路径。"
+          },
+          "qaReviewId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "【必填】submit_page_to_canvas 返回的精确 QA 会话 ID，禁止复用其它任务的 ID。"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "yes",
+              "no"
+            ],
+            "description": "【必填】只能根据用户本轮明确回答传 yes 或 no；模型不得自行代替用户决定。"
+          }
+        },
+        "required": [
+          "projectDir",
+          "qaReviewId",
+          "decision"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "agent_update_node",
+      "description": "局部修改工具：用于修改现有节点的文本、样式、布局、组件 props 或局部结构。替换图片内容、换图、修改 <img src> 必须用 agent_replace_node。修改已有节点前必须先调用 get_selection_node，并以返回的节点代码为基准：只改用户指定的属性，保留全部未修改的 style、class 和属性；禁止只输出一条新样式后省略原有宽高、颜色、字号、字重、行高等。要删除样式时必须显式写 property: initial，不能靠省略属性。两种用法：1) 只改父容器自身属性时，传带 data-node-id 的空根节点，系统保留子节点；2) 要调整子结构时，传完整子树，包括所有需要保留的子节点。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "targetNodeId": {
+            "type": "string",
+            "description": "【选填】单个目标图层 ID（例如 123:456）或包含该图层 layer_id 的 MasterGo goto 链接。若用户给出链接，直接传链接，工具会解析 ID；一次只能更新一个图层。不传时仅从 code 的 data-node-id 推导，无法推导则阻止更新。"
+          },
+          "code": {
+            "type": "string",
+            "description": "【必填】修改后的 HTML 代码片段。必须包含 data-node-id。"
+          },
+          "projectDir": {
+            "type": "string",
+            "description": "【选填】用户当前工作区的根目录绝对路径。本地图片场景建议传入；遗漏时工具会复用同一工具链最近使用的工作区，并在本次调用内部自动准备图片，无需单独启动服务。仅当没有可复用上下文时，按工具返回提示携带 projectDir 重试。"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "agent_replace_node",
+      "description": "节点替换：仅在用户明确要求“替换某个节点 / 图标 / 图片”时使用本工具。替换图片内容 / 换图 / 修改 <img src> 必须使用本工具，不要使用 agent_update_node。其中图标遵循 FontAwesome，图片换图遵循 <img src=\"{{keyword}}\" /> 或本地图片相对路径语义规范。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "targetNodeId": {
+            "type": "string",
+            "description": "【选填】单个目标图层 ID（例如 123:456）或包含该图层 layer_id 的 MasterGo goto 链接。若用户给出链接，直接传链接，工具会解析 ID；一次只能替换一个图层。不传时仅从 code 的 data-node-id 推导，无法推导则阻止替换。"
+          },
+          "code": {
+            "type": "string",
+            "description": "【必填】新的 HTML 代码内容。将完整替换目标节点内部。"
+          },
+          "projectDir": {
+            "type": "string",
+            "description": "【选填】用户当前工作区的根目录绝对路径。本地图片场景建议传入；遗漏时工具会复用同一工具链最近使用的工作区，并在本次调用内部自动准备图片，无需单独启动服务。仅当没有可复用上下文时，按工具返回提示携带 projectDir 重试。"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "agent_sync_design",
+      "description": "全量同步工具：仅用于把用户指定的本地静态 HTML / 本地代码文件全量覆盖到已有画布根节点。调用前必须加载并遵守 page-generate 规则，检查本地 HTML 是否满足 MasterGo 逆向转译协议红线；若不符合，必须先修正为纯静态 HTML 根节点片段再同步。必须有用户本轮明确确认，并提供 rootId 或可反推 rootId 的基准 HTML 文件。不要用于新页面生成、页面交付或“把生成结果发送到 MasterGo”；这些场景走 design_page → submit_page_to_canvas。历史确认不能复用，也不要在每次修改后自动同步。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "targetNodeId": {
+            "type": "string",
+            "description": "【推荐】页面的单个根节点 ID（rootId）或包含该图层 layer_id 的 MasterGo goto 链接。一次只能同步一个根节点。不传时仅尝试从本地基准 HTML 文件名反推 rootId；推导失败会报错，不会默认同步当前选中图层。"
+          },
+          "filePath": {
+            "type": "string",
+            "description": "【必填】本地静态 HTML 文件的绝对路径（通常位于 .mastergo/... 目录下）。工具会自动读取内容。严禁传入 .vue/.tsx 业务代码路径！"
+          },
+          "userConfirmed": {
+            "type": "boolean",
+            "default": false,
+            "description": "【必填】用户是否已针对本次“本地 HTML / 本地代码文件全量覆盖同步到画布根节点”工具调用明确确认。每次调用都必须重新确认；仅在用户本轮明确要求这个本地文件覆盖操作，或在助手询问这个精确操作后明确回答“是/确认”时传 true。"
+          },
+          "userConfirmationText": {
+            "type": "string",
+            "description": "【必填】用户对本次本地文件全量覆盖同步的确认原文，例如“把本地 HTML 文件全量同步覆盖到画布”“将这个本地代码文件同步到设计稿根节点”“是”“确认”。禁止填写“同步到 MasterGo”这类页面交付口语、历史确认、上下文总结或模型推断。"
+          }
+        },
+        "required": [
+          "filePath"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "agent_generate_image",
+      "description": "生图资产落盘工具：仅当用户明确要求 AI/模型生成图片、原创图片资产或插画时使用。普通页面配图默认写 <img src=\"{{keyword}}\" />，不要调用本工具。本工具只接收已由生图能力写入本地的 sourcePath，并复制到项目目录，返回可用于 HTML 的相对 <img src>。如果目标是替换画布中的图片节点，成功后继续调用 agent_replace_node，并传 projectDir 以启用本地图片临时服务。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectDir": {
+            "type": "string",
+            "description": "【必填】用户当前工作区的根目录绝对路径。outputDir 必须解析到该目录内。"
+          },
+          "sourcePath": {
+            "type": "string",
+            "description": "【必填】生图工具已经落盘的本地图片文件路径，支持绝对路径或相对路径。工具会读取该文件并复制到目标目录。"
+          },
+          "fileName": {
+            "type": "string",
+            "description": "【选填】目标文件名，例如 hero-cat.png。不传时使用内容哈希生成文件名；若文件已存在，会自动追加 -2、-3，避免覆盖。"
+          },
+          "outputDir": {
+            "type": "string",
+            "description": "【选填】保存目录。相对路径按 projectDir 解析；不传则保存到 .mastergo/generated-images。"
+          },
+          "mimeType": {
+            "type": "string",
+            "description": "【选填】图片 MIME 类型，例如 image/png、image/jpeg、image/webp。sourcePath 后缀无法推断时使用。"
+          }
+        },
+        "required": [
+          "projectDir",
+          "sourcePath"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_design_diff",
+      "description": "比较差异：获取本地基准文件与 MasterGo 画布设计现状的差异。调用后返回 JSON 形式的 Diff 结果，用于协助判断有哪些图层或样式发生了改变。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectDir": {
+            "type": "string",
+            "description": "【必填】用户当前工作区的根目录绝对路径"
+          },
+          "targetNodeId": {
+            "type": "string",
+            "description": "【选填】单个 MasterGo 图层 ID（例如 123:456）或包含该图层 layer_id 的 MasterGo goto 链接。一次只能对比一个图层；不传时读取当前选中图层。"
+          },
+          "filePath": {
+            "type": "string",
+            "description": "【选填】本地基准 HTML 文件的绝对路径。如果基准文件已被本地编辑流程更新，请直接传此路径。"
+          }
+        },
+        "required": [
+          "projectDir"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "agent_remove_node",
+      "description": "移除节点：在 MasterGo 画布中执行删除节点操作。支持通过 targetNodeId 指定 ID，或在不传 ID 时默认删除当前选中图层。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "targetNodeId": {
+            "type": "string",
+            "description": "【选填】单个目标图层 ID（例如 123:456）或包含该图层 layer_id 的 MasterGo goto 链接。一次只能删除一个图层；传入多个链接会阻止操作。不传时才使用当前选中图层。"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "agent_remove_variable",
+      "description": "删除变量：危险操作专用工具。删除当前 MasterGo 文件变量，不走 agent_update_variables；工具名为 agent_remove_variable。优先传 id；无 id 时必须传 collection/collectionId + name + type 以避免误删。本工具首次调用会自动加载 variable-generate 规则。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "【推荐】要删除的变量 ID。"
+          },
+          "collection": {
+            "type": "string",
+            "description": "【无 id 时必填】变量所在集合名称。"
+          },
+          "collectionId": {
+            "type": "string",
+            "description": "【选填】变量所在集合 ID；可替代 collection。"
+          },
+          "name": {
+            "type": "string",
+            "description": "【无 id 时必填】变量名称。"
+          },
+          "type": {
+            "type": "string",
+            "description": "【无 id 时必填】变量类型，例如 COLOR、PAINT、NUMBER。"
+          },
+          "variables": {
+            "description": "【选填】批量删除数组；每项优先传 id，或传 collection/collectionId + name + type。"
+          },
+          "operations": {
+            "description": "【选填】批量删除数组；每项优先传 id，或传 collection/collectionId + name + type。"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ]
+}

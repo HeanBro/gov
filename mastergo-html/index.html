@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>企业经营管理驾驶舱 · 交互原型</title>
+    <link rel="stylesheet" href="./styles/app.css" />
+  </head>
+  <body>
+    <main class="prototype-shell">
+      <section class="workspace">
+        <div class="phone" aria-label="移动端交互原型">
+          <iframe id="page-frame" title="企业经营管理驾驶舱页面" src="./overview.html"></iframe>
+          <div id="indicator-modal" class="modal-layer" hidden>
+            <button class="modal-backdrop" type="button" data-close-modal aria-label="关闭弹窗"></button>
+            <section class="indicator-dialog" role="dialog" aria-modal="true" aria-labelledby="indicator-title">
+              <header class="dialog-header">
+                <div>
+                  <span>统计列表与明细详情</span>
+                  <h2 id="indicator-title">指标健康情况</h2>
+                </div>
+                <button class="dialog-close" type="button" data-close-modal aria-label="关闭">×</button>
+              </header>
+              <div id="indicator-content"></div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./scripts/prototype-data.js"></script>
+    <script src="./scripts/app.js"></script>
+  </body>
+</html>
