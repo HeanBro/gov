@@ -44,6 +44,92 @@
       // first Reason block inside the real content is the H5 header we keep.
       const pageHeader = content.querySelector('[data-name="Reason"]');
       if (pageHeader) pageHeader.dataset.h5Header = "true";
+
+      const contentInner = content.querySelector(':scope > [data-name="content"]') || content.firstElementChild;
+      if (contentInner) {
+        contentInner.dataset.h5ContentInner = "true";
+        contentInner.style.width = "100%";
+        contentInner.style.maxWidth = "100%";
+        contentInner.style.minWidth = "0";
+        contentInner.style.boxSizing = "border-box";
+        [...contentInner.children].forEach(section => {
+          section.style.width = "100%";
+          section.style.maxWidth = "100%";
+          section.style.minWidth = "0";
+          section.style.boxSizing = "border-box";
+        });
+      }
+      const managedPage = /排行|督办/.test(document.title);
+      if (!managedPage && pageHeader && contentInner) {
+        pageHeader.dataset.h5OverviewHeader = "true";
+        contentInner.style.paddingTop = "48px";
+      }
+
+      if (contentInner) {
+        const fullWidthSeeds = new Set(["375px", "366px", "364px", "356px", "351px", "343px", "341px", "340px", "324px"]);
+        const flexibleColumnSeeds = new Set(["310px", "282px", "257px"]);
+        const markAncestorsFluid = seed => {
+          let parent = seed.parentElement;
+          for (let depth = 0; parent && parent !== contentInner && depth < 8; depth += 1, parent = parent.parentElement) {
+            if (parent === pageHeader || parent.closest('[data-h5-header="true"]')) break;
+            parent.dataset.h5FluidWrap = "true";
+            if (parent.getAttribute("data-name") === "Reason") break;
+          }
+        };
+
+        [...contentInner.querySelectorAll("*")].forEach(node => {
+          if (fullWidthSeeds.has(node.style.width)) {
+            node.dataset.h5FluidFull = "true";
+            markAncestorsFluid(node);
+          } else if (flexibleColumnSeeds.has(node.style.width)) {
+            node.dataset.h5FluidFlex = "true";
+            markAncestorsFluid(node);
+          }
+        });
+      }
+
+      if (managedPage && contentInner) {
+        const sections = [...contentInner.children];
+        const scrollRegion = [...contentInner.querySelectorAll('[data-name="Reason"]')].filter(node => node !== pageHeader).at(-1);
+
+        document.documentElement.style.height = "100%";
+        document.documentElement.style.overflow = "hidden";
+        document.body.style.height = "100vh";
+        document.body.style.paddingBottom = "0";
+        document.body.style.overflow = "hidden";
+        root.style.height = "100vh";
+        root.style.minHeight = "100vh";
+        root.style.overflow = "hidden";
+        content.style.height = "calc(100vh - 56px)";
+        content.style.minHeight = "0";
+        content.style.overflow = "hidden";
+        contentInner.style.height = "100%";
+        contentInner.style.minHeight = "0";
+        contentInner.style.display = "flex";
+        contentInner.style.flexDirection = "column";
+        contentInner.style.overflow = "hidden";
+        sections.forEach(section => { section.style.flexShrink = "0"; });
+
+        if (scrollRegion) {
+          scrollRegion.dataset.h5ScrollRegion = document.title.includes("督办") ? "supervision" : "ranking";
+          scrollRegion.style.gap = "12px";
+          scrollRegion.style.width = "100%";
+          scrollRegion.style.height = "auto";
+          scrollRegion.style.minHeight = "0";
+          scrollRegion.style.flex = "1 1 auto";
+          scrollRegion.style.overflowX = "hidden";
+          scrollRegion.style.overflowY = "auto";
+          scrollRegion.style.overscrollBehavior = "contain";
+          [...scrollRegion.children].forEach(child => {
+            child.style.width = "100%";
+            child.style.maxWidth = "100%";
+            child.style.boxSizing = "border-box";
+          });
+          [...scrollRegion.querySelectorAll('[data-name*="14296"]')].forEach(node => {
+            node.style.gap = "12px";
+          });
+        }
+      }
     }
 
     const bottomNav = directChildren.find(node => node.style.bottom === "0px" && node.style.height === "64px");
@@ -61,6 +147,18 @@
 
     const searchNodes = [...root.querySelectorAll('[data-name="搜索"]')];
     searchNodes.forEach(node => { node.dataset.h5Search = "true"; });
+
+    const nativeDimensionLabels = document.title.includes("经营排行")
+      ? ["收入TOP", "利润TOP", "成本TOP"]
+      : document.title.includes("运营排行")
+        ? ["工单完成率", "设备完好率", "能耗达标率"]
+        : [];
+    if (nativeDimensionLabels.length) {
+      const firstDimension = [...root.querySelectorAll("span")]
+        .find(span => nativeDimensionLabels.includes((span.textContent || "").trim()));
+      const dimensionTabs = firstDimension?.parentElement?.parentElement;
+      if (dimensionTabs) dimensionTabs.dataset.h5DimensionTabs = "true";
+    }
 
     // Keep the exported cards visually aligned with the formal metric table.
     // The workbook defines the number of metrics per domain; the score values
@@ -108,16 +206,22 @@
     // frame is a fixed-height export, while the H5 content must grow with it.
     const hasNativeChart = root.querySelector('[data-name="BarChart"]');
     if (hasNativeChart) {
-      [...root.querySelectorAll('[data-name="Reason"]')].slice(1).forEach(reason => {
-        reason.style.overflow = "visible";
-      });
+      [...root.querySelectorAll('[data-name="Reason"]')]
+        .filter(reason => !reason.dataset.h5ScrollRegion)
+        .slice(1)
+        .forEach(reason => { reason.style.overflow = "visible"; });
       [...root.querySelectorAll('[data-name="Container"]')]
         .filter(node => node.querySelector('[data-name="BarChart"]'))
         .forEach(card => {
           card.dataset.h5ChartCard = "true";
+          if (card.parentElement) card.parentElement.dataset.h5ChartCardWrap = "true";
           card.style.height = "auto";
           card.style.overflow = "visible";
         });
+      [...root.querySelectorAll('[data-name="BarChart"]')].forEach(chart => {
+        chart.style.width = "100%";
+        chart.style.maxWidth = "100%";
+      });
     }
 
     // Amounts in the business ranking are intentionally single-line values.
@@ -135,7 +239,8 @@
 
     // The supervision export keeps indentation around the explicit <br> in
     // the update label, which turns the intended two lines into four lines.
-    // Normalize that label and restore the compact update bar height.
+    // Normalize only the label; the shared dynamic style keeps this bar the
+    // same natural height as the ranking page.
     const supervisionDynamicLabel = root.querySelector('[data-node-id="2:8962"]');
     const supervisionDynamicBar = root.querySelector('[data-node-id="2:8948"]');
     if (supervisionDynamicLabel && supervisionDynamicBar) {
@@ -144,29 +249,26 @@
       supervisionDynamicLabel.style.height = "24px";
       supervisionDynamicLabel.style.lineHeight = "12px";
       supervisionDynamicLabel.style.whiteSpace = "normal";
-      supervisionDynamicBar.style.height = "34px";
-      supervisionDynamicBar.style.minHeight = "34px";
     }
 
-    // The wave bitmap was exported with an absolute position outside the
-    // hero, leaving only the small right-side block decoration visible.
-    // Re-anchor it to the hero bounds so the MasterGo background is visible.
-    const supervisionWave = root.querySelector('[data-node-id="2:9001"]');
-    const supervisionWaveLayer = root.querySelector('[data-node-id="2:9000"]');
-    if (supervisionWave && supervisionWaveLayer) {
-      supervisionWaveLayer.style.width = "100%";
-      supervisionWaveLayer.style.height = "100%";
-      supervisionWaveLayer.style.left = "0";
-      supervisionWaveLayer.style.right = "auto";
-      supervisionWaveLayer.style.top = "0";
-      supervisionWaveLayer.style.overflow = "hidden";
-      supervisionWave.style.width = "494px";
-      supervisionWave.style.height = "494px";
-      supervisionWave.style.left = "0";
-      supervisionWave.style.top = "-150px";
-      supervisionWave.style.right = "auto";
-      supervisionWave.style.opacity = "0.3";
-      supervisionWave.style.pointerEvents = "none";
+    // Ranking and supervision share the same wave bitmap, but each export
+    // assigns different node ids and places it outside the hero bounds.
+    const heroWave = root.querySelector('img[data-name="image.png"][src*="f2b2e3f4d2d5021ee98ed3bf9e6058c5"]');
+    const heroWaveLayer = heroWave?.parentElement;
+    if (heroWave && heroWaveLayer) {
+      heroWaveLayer.style.width = "100%";
+      heroWaveLayer.style.height = "100%";
+      heroWaveLayer.style.left = "0";
+      heroWaveLayer.style.right = "auto";
+      heroWaveLayer.style.top = "0";
+      heroWaveLayer.style.overflow = "hidden";
+      heroWave.style.width = "494px";
+      heroWave.style.height = "494px";
+      heroWave.style.left = "0";
+      heroWave.style.top = "-150px";
+      heroWave.style.right = "auto";
+      heroWave.style.opacity = "0.3";
+      heroWave.style.pointerEvents = "none";
     }
 
     // The MasterGo export splits the insight copy into zero-width spans and
@@ -228,14 +330,159 @@
           gap: 0 !important;
           overflow: visible !important;
           background: #fff !important;
+          position: sticky !important;
+          top: 0 !important;
+          z-index: 40 !important;
+        }
+        [data-h5-overview-header="true"] {
+          position: fixed !important;
+          top: 0 !important;
+          left: 50% !important;
+          width: min(100%, 750px) !important;
+          max-width: 750px !important;
+          transform: translateX(-50%) !important;
+          z-index: 40 !important;
         }
         [data-h5-header="true"] > div:first-child {
           width: 100% !important;
           height: 32px !important;
           min-height: 32px !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+        }
+        [data-h5-header="true"] > div:first-child > div:first-child {
+          width: auto !important;
+          min-width: 0 !important;
+          display: flex !important;
+          flex: 1 1 auto !important;
+          align-items: center !important;
+          gap: 8px !important;
+          margin-right: 8px !important;
+        }
+        [data-h5-header="true"] > div:first-child > div:first-child > div:first-child {
+          width: 32px !important;
+          height: 32px !important;
+          flex: none !important;
+          border-radius: 11.64px !important;
+        }
+        [data-h5-header="true"] > div:first-child > div:first-child > div:first-child [data-name="Icon"] {
+          left: 8.73px !important;
+          top: 8.73px !important;
+        }
+        [data-h5-header="true"] > div:first-child > div:first-child > div:first-child [data-name="Icon"] img {
+          width: 14.54px !important;
+          height: 14.54px !important;
+          display: block !important;
+        }
+        [data-h5-header="true"] > div:first-child > div:last-child {
+          height: 32px !important;
+          display: flex !important;
+          flex: none !important;
+          align-items: center !important;
+          gap: 6.4px !important;
+        }
+        [data-h5-header="true"] > div:first-child > div:first-child > div:last-child {
+          min-width: 0 !important;
+        }
+        [data-h5-header="true"] > div:first-child > div:first-child > div:last-child span {
+          display: block !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
         }
         [data-h5-header="true"] [data-name="Button"] {
           flex-shrink: 0 !important;
+        }
+        [data-h5-header="true"] [data-name="Button - 打开个人侧边栏"] {
+          width: 32px !important;
+          height: 32px !important;
+          flex: none !important;
+          border-radius: 223px !important;
+        }
+        [data-h5-header="true"] [data-name="Button - 打开个人侧边栏"] [data-name="Icon"] {
+          left: 8px !important;
+          top: 8px !important;
+        }
+        [data-h5-header="true"] [data-name="Button - 打开个人侧边栏"] img {
+          width: 16px !important;
+          height: 16px !important;
+          display: block !important;
+        }
+        [data-h5-content-inner],
+        [data-h5-content-inner] > * {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
+          box-sizing: border-box !important;
+        }
+        [data-h5-content-inner] > [data-name="Reason"]:not([data-h5-header="true"]) > * {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
+          box-sizing: border-box !important;
+        }
+        [data-h5-fluid-wrap],
+        [data-h5-fluid-full] {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
+          box-sizing: border-box !important;
+        }
+        [data-h5-fluid-flex] {
+          width: auto !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
+          flex: 1 1 auto !important;
+          box-sizing: border-box !important;
+        }
+        [data-h5-content-inner] [style*="width: 375px"],
+        [data-h5-content-inner] [style*="width: 366px"],
+        [data-h5-content-inner] [style*="width: 364px"],
+        [data-h5-content-inner] [style*="width: 356px"],
+        [data-h5-content-inner] [style*="width: 351px"],
+        [data-h5-content-inner] [style*="width: 343px"],
+        [data-h5-content-inner] [style*="width: 341px"],
+        [data-h5-content-inner] [style*="width: 340px"],
+        [data-h5-content-inner] [style*="width: 324px"] {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
+          box-sizing: border-box !important;
+        }
+        [data-name="容器 14295"] {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
+          flex: 1 1 auto !important;
+        }
+        [data-name="容器 14295"] > [data-name="容器 14293"] {
+          width: auto !important;
+          min-width: 0 !important;
+          flex: 1 1 auto !important;
+        }
+        [data-name="容器 14295"] > [data-name="容器 14293"] > span {
+          min-width: 0 !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+        [data-h5-dynamic] > [data-name="Text"] {
+          right: 2px !important;
+          left: auto !important;
+        }
+        [data-h5-scroll-region] [style*="width: 310px"] {
+          width: auto !important;
+          min-width: 0 !important;
+          flex: 1 1 auto !important;
+        }
+        [data-h5-scroll-region] [style*="width: 257px"] {
+          width: auto !important;
+          min-width: 0 !important;
+          flex: 1 1 auto !important;
+        }
+        [data-h5-content-inner] [style*="width: 302px"] {
+          max-width: 100% !important;
+          box-sizing: border-box !important;
         }
         [data-h5-search] {
           position: relative !important;
@@ -285,12 +532,85 @@
           background: #D8DDE5 !important;
         }
         [data-h5-metric-segments] > i.is-achieved { background: #22C55E !important; }
+        [data-h5-chart-card-wrap],
+        [data-h5-chart-card] {
+          width: 100% !important;
+          max-width: 100% !important;
+          box-sizing: border-box !important;
+        }
         [data-h5-chart-card] {
           height: auto !important;
           overflow: visible !important;
           border-radius: 16px !important;
         }
+        [data-h5-scroll-region] {
+          height: auto !important;
+          min-height: 0 !important;
+          flex: 1 1 auto !important;
+          overflow-x: hidden !important;
+          overflow-y: auto !important;
+          scrollbar-width: none !important;
+          -webkit-overflow-scrolling: touch;
+        }
+        [data-h5-scroll-region]::-webkit-scrollbar { display: none !important; }
+        [data-native-interactive-chart="true"] {
+          width: 100% !important;
+          height: 126px !important;
+          padding: 0 12px !important;
+          overflow: hidden !important;
+        }
+        .native-chart-bars {
+          width: 100%;
+          min-width: 0;
+          height: 126px;
+          flex: none;
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-around;
+          gap: 12px;
+          padding: 16px 10px 6px;
+          border-bottom: 1px solid #EEF2F7;
+          box-sizing: border-box;
+        }
+        .native-chart-column {
+          min-width: 0;
+          height: 100%;
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          flex-direction: column;
+          gap: 4px;
+          position: relative;
+        }
+        .native-chart-column i {
+          width: 18px;
+          max-height: 84px;
+          display: block;
+          border-radius: 5px 5px 0 0;
+          background: var(--native-bar);
+          transition: height 180ms ease;
+        }
+        .native-chart-column span { color: #AAB8CC; font-size: 9px; line-height: 11px; }
+        .native-chart-value {
+          position: absolute;
+          top: -2px;
+          left: 50%;
+          padding: 2px 4px;
+          border: 1px solid #E6EBF3;
+          border-radius: 6px;
+          color: #51627F;
+          background: #fff;
+          font-size: 8px;
+          white-space: nowrap;
+          transform: translateX(-50%);
+          opacity: 0;
+          transition: opacity 160ms ease;
+        }
+        .native-chart-column:first-child .native-chart-value { opacity: 1; }
         [data-h5-dynamic] {
+          height: auto !important;
+          min-height: 40px !important;
           border: 1px solid rgba(255,255,255,0.78) !important;
           border-image: none !important;
           border-radius: 8px !important;
@@ -298,22 +618,61 @@
           box-shadow: 0 1px 4px rgba(30,50,120,0.08) !important;
         }
         [data-h5-insight-container] {
-          min-height: 66px !important;
-          height: 66px !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          min-height: 48px !important;
+          height: 48px !important;
           box-sizing: border-box !important;
           padding: 8px 12px !important;
           border-radius: 16px !important;
         }
         [data-h5-insight] {
-          width: 298px !important;
+          width: 100% !important;
+          max-width: 100% !important;
           height: 30px !important;
           margin: 0 !important;
           font-size: 10px !important;
           line-height: 15px !important;
+          font-family: AlibabaPuHuiTi, sans-serif !important;
+          font-weight: 700 !important;
+          color: #3D5275 !important;
           overflow: hidden !important;
+          display: block !important;
+          white-space: normal !important;
+          overflow-wrap: anywhere !important;
+          letter-spacing: 0 !important;
         }
+        [data-h5-insight="business"] { color: #3D5275 !important; }
+        [data-h5-insight="operation"] { color: #7C3A0D !important; }
         [data-h5-insight] > span {
           width: auto !important;
+          font-size: 10px !important;
+          line-height: 15px !important;
+          font-family: AlibabaPuHuiTi, sans-serif !important;
+          font-weight: 400 !important;
+          color: #3D5275 !important;
+        }
+        [data-h5-insight] > span:nth-child(2) { font-weight: 700 !important; }
+        [data-h5-dimension-tabs] {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
+          display: grid !important;
+          grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+          gap: 4px !important;
+          box-sizing: border-box !important;
+        }
+        [data-h5-dimension-tabs] > [data-name="Button"] {
+          width: auto !important;
+          min-width: 0 !important;
+          flex: 1 1 0 !important;
+          box-sizing: border-box !important;
+        }
+        [data-h5-dimension-tabs] > [data-name="Button"] span {
+          max-width: 100% !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
           font-size: 10px !important;
           line-height: 15px !important;
         }

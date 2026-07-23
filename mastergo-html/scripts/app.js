@@ -20,7 +20,7 @@
     supervision: "supervision.html"
   };
   const initialFrame = document.getElementById("page-frame");
-  initialFrame.dataset.loaded = "true";
+  initialFrame.dataset.loaded = "false";
   const frames = new Map([["overview", initialFrame]]);
   let currentRoute = "overview";
   let requestedRoute = "overview";
@@ -30,6 +30,20 @@
   let searchTimer;
 
   const escapeHtml = value => String(value ?? "").replace(/[&<>\"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[character]));
+
+  function markFrameReady(frame, route) {
+    if (frame.classList.contains("is-ready")) return;
+    frame.dataset.loaded = "true";
+    applyScope(frame);
+    requestAnimationFrame(() => frame.classList.add("is-ready"));
+    if (frame.dataset.pendingRoute === "true" && requestedRoute === route) {
+      frame.dataset.pendingRoute = "false";
+      activateFrame(route);
+    }
+  }
+
+  initialFrame.addEventListener("load", () => markFrameReady(initialFrame, "overview"));
+  if (initialFrame.contentDocument?.readyState === "complete") markFrameReady(initialFrame, "overview");
 
   function showToast(message) {
     toast.textContent = message;
@@ -46,14 +60,7 @@
     frame.dataset.routeFrame = route;
     frame.title = `企业经营管理驾驶舱${route.startsWith("ranking") ? "排行" : route === "supervision" ? "督办" : "总览"}`;
     frame.src = `./${files[route]}`;
-    frame.addEventListener("load", () => {
-      frame.dataset.loaded = "true";
-      applyScope(frame);
-      if (frame.dataset.pendingRoute === "true" && requestedRoute === route) {
-        frame.dataset.pendingRoute = "false";
-        activateFrame(route);
-      }
-    });
+    frame.addEventListener("load", () => markFrameReady(frame, route));
     stack.appendChild(frame);
     frames.set(route, frame);
     return frame;
@@ -111,7 +118,7 @@
         <div class="summary-track">${Array.from({ length: segmentCount }, (_, index) => `<i class="${index < activeSegments ? "is-filled" : ""}"></i>`).join("")}</div>
         <div class="summary-meta">年度指标 ${data.metrics.length} 项 / 已达标 ${healthy} 项</div>
       </div>
-      <div class="scope-field"><label>按公司分类</label><button type="button" data-modal-scope><span class="scope-dot"></span><span>${escapeHtml(selectedScope)}</span><span class="scope-chevron">⌄</span></button></div>
+      <div class="scope-field"><label>按公司分类</label><button type="button" data-modal-scope><span class="scope-dot"></span><span>${escapeHtml(selectedScope)}</span><span class="scope-chevron" aria-hidden="true"></span></button></div>
       <div class="metric-list">${data.metrics.map(metric => `
         <details class="metric-item">
           <summary>
