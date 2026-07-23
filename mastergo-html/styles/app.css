@@ -82,7 +82,7 @@ button { font: inherit; }
   max-height: calc(100vh - 108px);
   overflow-y: auto;
   padding: 0 0 8px;
-  background: linear-gradient(180deg, #fff 0, #fff 145px, #f5f6f9 145px, #f5f6f9 100%);
+  background: #fff;
   scrollbar-width: none;
 }
 #indicator-content::-webkit-scrollbar { display: none; }
