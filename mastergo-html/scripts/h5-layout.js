@@ -62,6 +62,37 @@
     const searchNodes = [...root.querySelectorAll('[data-name="搜索"]')];
     searchNodes.forEach(node => { node.dataset.h5Search = "true"; });
 
+    // Keep the exported cards visually aligned with the formal metric table.
+    // The workbook defines the number of metrics per domain; the score values
+    // remain demo values because the workbook does not contain live measures.
+    const metricCounts = { "经营板块": 9, "运营板块": 3, "内控板块": 3, "舆情板块": 4, "创新板块": 3, "安全板块": 5 };
+    const metricScores = { "经营板块": 92, "运营板块": 95, "内控板块": 97, "舆情板块": 95, "创新板块": 87, "安全板块": 99 };
+    const metricHighlights = {
+      "经营板块": "收入/利润/现金流",
+      "运营板块": "满意度/投诉闭环",
+      "内控板块": "审计/流程/付款",
+      "舆情板块": "负面事件/响应",
+      "创新板块": "知识产权/合同/研发",
+      "安全板块": "事故/隐患/培训"
+    };
+    [...root.querySelectorAll('[data-name="Button"]')].forEach(card => {
+      const cardText = (card.textContent || "").replace(/\s+/g, "");
+      const domain = Object.keys(metricCounts).find(label => cardText.includes(label));
+      if (!domain) return;
+      card.dataset.h5Indicator = domain.replace("板块", "");
+      card.style.cursor = "pointer";
+      const score = [...card.querySelectorAll("span")].find(span => /^\s*\d{2,3}\s*$/.test(span.textContent || ""));
+      if (score) score.textContent = String(metricScores[domain]);
+      [...card.querySelectorAll("span")].filter(span => (span.textContent || "").includes("年度指标")).forEach(span => {
+        span.textContent = `正式指标 ${metricCounts[domain]} 项 · ${metricHighlights[domain]}`;
+        span.style.whiteSpace = "nowrap";
+        span.style.fontSize = "8px";
+      });
+    });
+    [...root.querySelectorAll('[data-name="Button"], [data-name="容器 14291"], [data-name="容器 14297"]')].forEach(node => {
+      node.style.cursor = "pointer";
+    });
+
     // Preserve the full last rank row on native ranking pages. The source
     // frame is a fixed-height export, while the H5 content must grow with it.
     const hasNativeChart = root.querySelector('[data-name="BarChart"]');

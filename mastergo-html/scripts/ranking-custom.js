@@ -42,7 +42,7 @@
         <section class="custom-card">
           <div class="custom-card-main">
             <div class="custom-card-title"><span>${data.cardTitle}</span><span class="custom-pill">本年度累计</span></div>
-            <div class="custom-segments">${data.segments.map((item, index) => `<span class="${index === 0 ? "active" : ""}">${item}</span>`).join("")}</div>
+            <div class="custom-segments">${data.segments.map((item, index) => `<button type="button" class="${index === 0 ? "active" : ""}" data-segment-index="${index}">${item}</button>`).join("")}</div>
             <div class="custom-insight"><b>经营分析：</b>${data.insight}</div>
             <div class="custom-chart">${data.values.map((value, index) => `
               <div class="custom-bar-wrap">
@@ -64,12 +64,27 @@
         <section class="custom-card custom-secondary">
           <h3>关键指标概览</h3>
           <div class="custom-secondary-grid">${data.secondary.map((label, index) => `
-            <div class="custom-stat"><span>${label}</span><strong>${data.stats[index]}</strong><em>${data.trends[index]}</em></div>
+            <button type="button" class="custom-stat"><span>${label}</span><strong>${data.stats[index]}</strong><em>${data.trends[index]}</em></button>
           `).join("")}</div>
         </section>
       </div>`;
     setActiveTab();
     document.title = `企业经营管理驾驶舱 · ${data.tab}排行`;
+    rootInteractive();
+  }
+
+  function rootInteractive() {
+    const root = document.querySelector(".custom-ranking");
+    if (!root) return;
+    root.querySelectorAll("[data-segment-index]").forEach(button => button.addEventListener("click", () => {
+      root.querySelectorAll("[data-segment-index]").forEach(item => item.classList.toggle("active", item === button));
+      const index = Number(button.dataset.segmentIndex);
+      const insight = root.querySelector(".custom-insight");
+      if (insight) insight.innerHTML = `<b>经营分析：</b>${data.insight} · 当前查看 ${data.segments[index]} 口径`;
+    }));
+    root.querySelectorAll(".custom-rank, .custom-stat").forEach(item => item.addEventListener("click", () => {
+      window.parent.postMessage({ source: "mastergo-prototype", action: "open-control", control: "detail", title: item.textContent.trim().replace(/\s+/g, " ").slice(0, 34), description: "已打开该排行条目的区域详情，支持查看指标趋势、责任单位和异常记录。" }, "*");
+    }));
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", render);

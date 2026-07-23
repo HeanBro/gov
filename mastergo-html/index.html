@@ -10,7 +10,9 @@
     <main class="prototype-shell">
       <section class="workspace">
         <div class="phone" aria-label="移动端交互原型">
-          <iframe id="page-frame" title="企业经营管理驾驶舱页面" src="./overview.html"></iframe>
+          <div id="page-stack" class="page-stack" aria-live="polite">
+            <iframe id="page-frame" class="route-frame is-active" data-route-frame="overview" title="企业经营管理驾驶舱总览" src="./overview.html"></iframe>
+          </div>
           <div id="indicator-modal" class="modal-layer" hidden>
             <button class="modal-backdrop" type="button" data-close-modal aria-label="关闭弹窗"></button>
             <section class="indicator-dialog" role="dialog" aria-modal="true" aria-labelledby="indicator-title">
@@ -24,11 +26,26 @@
               <div id="indicator-content"></div>
             </section>
           </div>
+          <div id="action-sheet" class="sheet-layer" hidden>
+            <button class="sheet-backdrop" type="button" data-close-sheet aria-label="关闭面板"></button>
+            <section class="action-sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+              <header class="sheet-header">
+                <div>
+                  <span id="sheet-eyebrow">操作面板</span>
+                  <h2 id="sheet-title">详细信息</h2>
+                </div>
+                <button class="sheet-close" type="button" data-close-sheet aria-label="关闭">×</button>
+              </header>
+              <div id="sheet-content" class="sheet-content"></div>
+            </section>
+          </div>
+          <div id="prototype-toast" class="prototype-toast" role="status" aria-live="polite" hidden></div>
         </div>
       </section>
     </main>
 
     <script src="./scripts/prototype-data.js"></script>
+    <script src="./scripts/metric-data.js"></script>
     <script src="./scripts/app.js"></script>
   </body>
 </html>
